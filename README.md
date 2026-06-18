@@ -501,3 +501,143 @@ node1                      : ok=6    changed=0    unreachable=0    failed=1    s
 node2                      : ok=6    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
 node3                      : ok=6    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0  
 ```
+
+## Remediate a failed check
+
+`touch remediate_packages.yml`:
+```yml
+- name: Remediate missing baseline packages
+  hosts: myhosts
+  gather_facts: true
+  become: true
+
+  vars_files:
+    - vars/server_specs.yml
+
+  tasks:
+    - name: Install required baseline packages
+      ansible.builtin.apt:
+        name: "{{ expected_specs.required_packages }}"
+        state: present
+        update_cache: true
+```
+Before running remediation in real environments, use check mode:
+`ansible-playbook -i inventory.ini remediate_packages.yml --check`
+
+Or diff mode:
+`ansible-playbook -i inventory.ini remediate_packages.yml --check --diff`
+
+
+Run it: `ansible-playbook -i inventory.ini remediate_packages.yml`
+
+Expected output:
+```
+PLAY [Remediate missing baseline packages] **********************************************************************************************************
+
+TASK [Gathering Facts] ******************************************************************************************************************************
+ok: [node1]
+ok: [node2]
+ok: [node3]
+
+TASK [Install required baseline packages] ***********************************************************************************************************
+changed: [node3]
+changed: [node1]
+changed: [node2]
+
+PLAY RECAP ******************************************************************************************************************************************
+node1                      : ok=2    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+node2                      : ok=2    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+node3                      : ok=2    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+```
+
+Then rerun validation: `ansible-playbook -i inventory.ini validate_build.yaml`
+
+Expected output:
+```
+PLAY [Validate server build against expected specs] **************************************************************************************************
+
+TASK [Gathering Facts] *******************************************************************************************************************************
+ok: [node3]
+ok: [node1]
+ok: [node2]
+
+TASK [Collect installed package facts] ***************************************************************************************************************
+ok: [node3]
+ok: [node2]
+ok: [node1]
+
+TASK [Check if required user exists] *****************************************************************************************************************
+ok: [node3]
+ok: [node2]
+ok: [node1]
+
+TASK [Build list of missing packages] ****************************************************************************************************************
+ok: [node1]
+ok: [node2]
+ok: [node3]
+
+TASK [Build compliance findings] *********************************************************************************************************************
+ok: [node1]
+ok: [node2]
+ok: [node3]
+
+TASK [Print compliance result] ***********************************************************************************************************************
+ok: [node1] => {
+    "compliance_findings": {
+        "compliant": true,
+        "host": "node1",
+        "memory_mb_actual": 7836,
+        "memory_mb_required": 128,
+        "missing_packages": [],
+        "os_family_actual": "Debian",
+        "os_family_expected": "Debian",
+        "required_user": "ansible",
+        "user_exists": true
+    }
+}
+ok: [node2] => {
+    "compliance_findings": {
+        "compliant": true,
+        "host": "node2",
+        "memory_mb_actual": 7836,
+        "memory_mb_required": 128,
+        "missing_packages": [],
+        "os_family_actual": "Debian",
+        "os_family_expected": "Debian",
+        "required_user": "ansible",
+        "user_exists": true
+    }
+}
+ok: [node3] => {
+    "compliance_findings": {
+        "compliant": true,
+        "host": "node3",
+        "memory_mb_actual": 7836,
+        "memory_mb_required": 128,
+        "missing_packages": [],
+        "os_family_actual": "Debian",
+        "os_family_expected": "Debian",
+        "required_user": "ansible",
+        "user_exists": true
+    }
+}
+
+TASK [Fail if server is not compliant] ***************************************************************************************************************
+ok: [node1] => {
+    "changed": false,
+    "msg": "Server node1 is compliant."
+}
+ok: [node2] => {
+    "changed": false,
+    "msg": "Server node2 is compliant."
+}
+ok: [node3] => {
+    "changed": false,
+    "msg": "Server node3 is compliant."
+}
+
+PLAY RECAP *******************************************************************************************************************************************
+node1                      : ok=7    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+node2                      : ok=7    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+node3                      : ok=7    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0  
+```
