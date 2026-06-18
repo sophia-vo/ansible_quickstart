@@ -1,3 +1,7 @@
+(Currently configured for a MacOS Linux system, will add Windows specific branch using Windows Subsystem for Linux (WSL) later.)
+
+Refer to [extremely_verbose_explanations.md](extremely_verbose_explanations.md) for in depth explanations of the code.
+
 ## Install Ansible.
 
 ```bash
@@ -550,7 +554,7 @@ node2                      : ok=2    changed=1    unreachable=0    failed=0    s
 node3                      : ok=2    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
 ```
 
-Then rerun validation: `ansible-playbook -i inventory.ini validate_build.yaml`
+Then rerun validation: `ansible-playbook -i inventory.ini validate_build.yml`
 
 Expected output:
 ```
@@ -1265,13 +1269,13 @@ Patching:
 
 In order the entire playthrough is:
 ```
-ansible-playbook -i inventory.ini gather_facts.yaml
-ansible-playbook -i inventory.ini validate_build.yaml
-ansible-playbook -i inventory.ini remediate_packages.yaml --check
-ansible-playbook -i inventory.ini remediate_packages.yaml
-ansible-playbook -i inventory.ini validation_report.yaml
-ansible-playbook -i inventory.ini preflight.yaml
-ansible-playbook -i inventory.ini safe_maintenance.yaml
+ansible-playbook -i inventory.ini gather_facts.yml
+ansible-playbook -i inventory.ini validate_build.yml
+ansible-playbook -i inventory.ini remediate_packages.yml --check
+ansible-playbook -i inventory.ini remediate_packages.yml
+ansible-playbook -i inventory.ini validation_report.yml
+ansible-playbook -i inventory.ini preflight.yml
+ansible-playbook -i inventory.ini safe_maintenance.yml
 ```
 
 With the focus being to build one master playbook that runs:
