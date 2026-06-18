@@ -1,0 +1,14 @@
+---
+  - name: Gather basic server facts
+    hosts: myhosts
+    gather_facts: true
+
+    tasks:
+      - name: Show OS information
+        ansible.builtin.debug:
+          msg:
+            - "Host: {{ inventory_hostname }}"
+            - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+            - "Architecture: {{ ansible_architecture }}"
+            - "Memory MB: {{ ansible_memtotal_mb }}"
+            - "Python: {{ ansible_python_version }}"

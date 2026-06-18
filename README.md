@@ -62,7 +62,7 @@ CMD ["/usr/sbin/sshd", "-D", "-e"]
 
 ## Create docker-compose.yml (in lab):
 
-```yaml
+```yml
 services:
   node1:
     build: .
@@ -132,7 +132,7 @@ ssh -p 2221 ansible@127.0.0.1
 
 Then `exit` back to ansible_quickstart.
 
-## hen test Ansible:
+## Then test Ansible:
 
 ```bash
 ansible-inventory -i inventory.ini --list
@@ -167,9 +167,9 @@ A reference to a single module that defines the operations that Ansible performs
 **Module**
 A unit of code or binary that Ansible runs on managed nodes. Ansible modules are grouped in collections with a Fully Qualified Collection Name (FQCN) for each module.
 
-Create a file named playbook.yaml in your ansible_quickstart directory, that you created earlier, with the following content:
+Create a file named playbook.yml in your ansible_quickstart directory, that you created earlier, with the following content:
 
-```yaml
+```yml
 - name: My first play
   hosts: myhosts
   tasks:
@@ -184,7 +184,7 @@ Create a file named playbook.yaml in your ansible_quickstart directory, that you
 ## Run your playbook.
 
 ```bash
-ansible-playbook -i inventory.ini playbook.yaml
+ansible-playbook -i inventory.ini playbook.yml
 ```
 
 Should return:
@@ -217,4 +217,77 @@ PLAY RECAP *********************************************************************
 node1                      : ok=3    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
 node2                      : ok=3    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
 node3                      : ok=3    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+```
+
+## Gathering Facts from all servers:
+
+Current directory:
+```
+ansible_quickstart/
+  inventory.ini
+  playbook.yml
+  lab/
+```
+
+Create **gather_facts.yml:**
+```
+- name: Gather basic server facts
+  hosts: myhosts
+  gather_facts: true
+
+  tasks:
+    - name: Show OS information
+      ansible.builtin.debug:
+        msg:
+          - "Host: {{ inventory_hostname }}"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Architecture: {{ ansible_architecture }}"
+          - "Memory MB: {{ ansible_memtotal_mb }}"
+          - "Python: {{ ansible_python_version }}"
+```
+
+Run it: `ansible-playbook -i inventory.ini gather_facts.yml`
+
+Should return something similar to:
+```
+PLAY [Gather basic server facts] ***********************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [node1]
+ok: [node2]
+ok: [node3]
+
+TASK [Show OS information] *****************************************************
+ok: [node1] => {
+    "msg": [
+        "Host: node1",
+        "OS: Ubuntu 24.04",
+        "Architecture: aarch64",
+        "Memory MB: 7836",
+        "Python: 3.12.3"
+    ]
+}
+ok: [node2] => {
+    "msg": [
+        "Host: node2",
+        "OS: Ubuntu 24.04",
+        "Architecture: aarch64",
+        "Memory MB: 7836",
+        "Python: 3.12.3"
+    ]
+}
+ok: [node3] => {
+    "msg": [
+        "Host: node3",
+        "OS: Ubuntu 24.04",
+        "Architecture: aarch64",
+        "Memory MB: 7836",
+        "Python: 3.12.3"
+    ]
+}
+
+PLAY RECAP *********************************************************************
+node1                      : ok=2    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+node2                      : ok=2    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+node3                      : ok=2    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
 ```
