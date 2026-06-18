@@ -1,0 +1,59 @@
+---
+  - name: Validate server build against expected specs
+    hosts: myhosts
+    gather_facts: true
+    become: true
+
+    vars_files:
+      - vars/server_specs.yml
+
+    tasks:
+      - name: Collect installed package facts
+        ansible.builtin.package_facts:
+          manager: auto
+
+      - name: Check if required user exists
+        ansible.builtin.getent:
+          database: passwd
+          key: "{{ expected_specs.required_user }}"
+        register: user_check
+        failed_when: false
+
+      - name: Build list of missing packages
+        ansible.builtin.set_fact:
+          missing_packages: >-
+            {{
+              expected_specs.required_packages
+              | reject('in', ansible_facts.packages.keys())
+              | list
+            }}
+
+      - name: Build compliance findings
+        ansible.builtin.set_fact:
+          compliance_findings:
+            host: "{{ inventory_hostname }}"
+            os_family_actual: "{{ ansible_os_family }}"
+            os_family_expected: "{{ expected_specs.os_family }}"
+            memory_mb_actual: "{{ ansible_memtotal_mb }}"
+            memory_mb_required: "{{ expected_specs.min_memory_mb }}"
+            required_user: "{{ expected_specs.required_user }}"
+            user_exists: "{{ user_check.ansible_facts.getent_passwd is defined }}"
+            missing_packages: "{{ missing_packages }}"
+            compliant: >-
+              {{
+                ansible_os_family == expected_specs.os_family
+                and ansible_memtotal_mb >= expected_specs.min_memory_mb
+                and user_check.ansible_facts.getent_passwd is defined
+                and missing_packages | length == 0
+              }}
+
+      - name: Print compliance result
+        ansible.builtin.debug:
+          var: compliance_findings
+
+      - name: Fail if server is not compliant
+        ansible.builtin.assert:
+          that:
+            - compliance_findings.compliant | bool
+          fail_msg: "Server {{ inventory_hostname }} is NOT compliant: {{ compliance_findings }}"
+          success_msg: "Server {{ inventory_hostname }} is compliant."

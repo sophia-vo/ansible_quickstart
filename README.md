@@ -40,7 +40,7 @@ cp ~/.ssh/id_ed25519.pub ssh/authorized_keys
 FROM ubuntu:24.04
 
 RUN apt-get update && \
-    apt-get install -y openssh-server sudo python3 && \
+    apt-get install -y openssh-server sudo python3 python3-apt && \
     rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -s /bin/bash ansible && \
@@ -290,4 +290,214 @@ PLAY RECAP *********************************************************************
 node1                      : ok=2    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
 node2                      : ok=2    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
 node3                      : ok=2    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+```
+
+## Creating and Validating Server Specs
+
+Create a folder: `mkdir -p vars`.
+
+Create `vars/server_specs.yml`:
+
+```yml
+expected_specs:
+  os_family: Debian
+  min_memory_mb: 128
+  required_user: ansible
+  required_packages:
+    - openssh-server
+    - sudo
+    - python3
+    - curl
+```
+
+We include curl since containers may not have it installed to test compliance failure later.
+
+Create `validate_build.yml`:
+```yml
+- name: Validate server build against expected specs
+  hosts: myhosts
+  gather_facts: true
+  become: true
+
+  vars_files:
+    - vars/server_specs.yml
+
+  tasks:
+    - name: Collect installed package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Check if required user exists
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ expected_specs.required_user }}"
+      register: user_check
+      failed_when: false
+
+    - name: Build list of missing packages
+      ansible.builtin.set_fact:
+        missing_packages: >-
+          {{
+            expected_specs.required_packages
+            | reject('in', ansible_facts.packages.keys())
+            | list
+          }}
+
+    - name: Build compliance findings
+      ansible.builtin.set_fact:
+        compliance_findings:
+          host: "{{ inventory_hostname }}"
+          os_family_actual: "{{ ansible_os_family }}"
+          os_family_expected: "{{ expected_specs.os_family }}"
+          memory_mb_actual: "{{ ansible_memtotal_mb }}"
+          memory_mb_required: "{{ expected_specs.min_memory_mb }}"
+          required_user: "{{ expected_specs.required_user }}"
+          user_exists: "{{ user_check.ansible_facts.getent_passwd is defined }}"
+          missing_packages: "{{ missing_packages }}"
+          compliant: >-
+            {{
+              ansible_os_family == expected_specs.os_family
+              and ansible_memtotal_mb >= expected_specs.min_memory_mb
+              and user_check.ansible_facts.getent_passwd is defined
+              and missing_packages | length == 0
+            }}
+
+    - name: Print compliance result
+      ansible.builtin.debug:
+        var: compliance_findings
+
+    - name: Fail if server is not compliant
+      ansible.builtin.assert:
+        that:
+          - compliance_findings.compliant | bool
+        fail_msg: "Server {{ inventory_hostname }} is NOT compliant: {{ compliance_findings }}"
+        success_msg: "Server {{ inventory_hostname }} is compliant."
+```
+
+Run it: `ansible-playbook -i inventory.ini validate_build.yml`
+
+Expected error output:
+```
+PLAY [Validate server build against expected specs] ******************************************************************************************************
+
+TASK [Gathering Facts] ***********************************************************************************************************************************
+ok: [node2]
+ok: [node3]
+ok: [node1]
+
+TASK [Collect installed package facts] *******************************************************************************************************************
+ok: [node2]
+ok: [node3]
+ok: [node1]
+
+TASK [Check if required user exists] *********************************************************************************************************************
+ok: [node2]
+ok: [node3]
+ok: [node1]
+
+TASK [Build list of missing packages] ********************************************************************************************************************
+ok: [node1]
+ok: [node2]
+ok: [node3]
+
+TASK [Build compliance findings] *************************************************************************************************************************
+ok: [node1]
+ok: [node2]
+ok: [node3]
+
+TASK [Print compliance result] ***************************************************************************************************************************
+ok: [node1] => {
+    "compliance_findings": {
+        "compliant": false,
+        "host": "node1",
+        "memory_mb_actual": 7836,
+        "memory_mb_required": 128,
+        "missing_packages": [
+            "curl"
+        ],
+        "os_family_actual": "Debian",
+        "os_family_expected": "Debian",
+        "required_user": "ansible",
+        "user_exists": true
+    }
+}
+ok: [node2] => {
+    "compliance_findings": {
+        "compliant": false,
+        "host": "node2",
+        "memory_mb_actual": 7836,
+        "memory_mb_required": 128,
+        "missing_packages": [
+            "curl"
+        ],
+        "os_family_actual": "Debian",
+        "os_family_expected": "Debian",
+        "required_user": "ansible",
+        "user_exists": true
+    }
+}
+ok: [node3] => {
+    "compliance_findings": {
+        "compliant": false,
+        "host": "node3",
+        "memory_mb_actual": 7836,
+        "memory_mb_required": 128,
+        "missing_packages": [
+            "curl"
+        ],
+        "os_family_actual": "Debian",
+        "os_family_expected": "Debian",
+        "required_user": "ansible",
+        "user_exists": true
+    }
+}
+
+TASK [Fail if server is not compliant] *******************************************************************************************************************
+[ERROR]: Task failed: Action failed: Server node1 is NOT compliant: {'host': 'node1', 'os_family_actual': 'Debian', 'os_family_expected': 'Debian', 'memory_mb_actual': 7836, 'memory_mb_required': 128, 'required_user': 'ansible', 'user_exists': True, 'missing_packages': ['curl'], 'compliant': False}
+Origin: /Users/sophiavo/ansible_quickstart/validate_build.yml:54:9
+
+52           var: compliance_findings
+53
+54       - name: Fail if server is not compliant
+           ^ column 9
+
+fatal: [node1]: FAILED! => {
+    "assertion": "compliance_findings.compliant | bool",
+    "changed": false,
+    "evaluated_to": false,
+    "msg": "Server node1 is NOT compliant: {'host': 'node1', 'os_family_actual': 'Debian', 'os_family_expected': 'Debian', 'memory_mb_actual': 7836, 'memory_mb_required': 128, 'required_user': 'ansible', 'user_exists': True, 'missing_packages': ['curl'], 'compliant': False}"
+}
+[ERROR]: Task failed: Action failed: Server node2 is NOT compliant: {'host': 'node2', 'os_family_actual': 'Debian', 'os_family_expected': 'Debian', 'memory_mb_actual': 7836, 'memory_mb_required': 128, 'required_user': 'ansible', 'user_exists': True, 'missing_packages': ['curl'], 'compliant': False}
+Origin: /Users/sophiavo/ansible_quickstart/validate_build.yml:54:9
+
+52           var: compliance_findings
+53
+54       - name: Fail if server is not compliant
+           ^ column 9
+
+fatal: [node2]: FAILED! => {
+    "assertion": "compliance_findings.compliant | bool",
+    "changed": false,
+    "evaluated_to": false,
+    "msg": "Server node2 is NOT compliant: {'host': 'node2', 'os_family_actual': 'Debian', 'os_family_expected': 'Debian', 'memory_mb_actual': 7836, 'memory_mb_required': 128, 'required_user': 'ansible', 'user_exists': True, 'missing_packages': ['curl'], 'compliant': False}"
+}
+[ERROR]: Task failed: Action failed: Server node3 is NOT compliant: {'host': 'node3', 'os_family_actual': 'Debian', 'os_family_expected': 'Debian', 'memory_mb_actual': 7836, 'memory_mb_required': 128, 'required_user': 'ansible', 'user_exists': True, 'missing_packages': ['curl'], 'compliant': False}
+Origin: /Users/sophiavo/ansible_quickstart/validate_build.yml:54:9
+
+52           var: compliance_findings
+53
+54       - name: Fail if server is not compliant
+           ^ column 9
+
+fatal: [node3]: FAILED! => {
+    "assertion": "compliance_findings.compliant | bool",
+    "changed": false,
+    "evaluated_to": false,
+    "msg": "Server node3 is NOT compliant: {'host': 'node3', 'os_family_actual': 'Debian', 'os_family_expected': 'Debian', 'memory_mb_actual': 7836, 'memory_mb_required': 128, 'required_user': 'ansible', 'user_exists': True, 'missing_packages': ['curl'], 'compliant': False}"
+}
+
+PLAY RECAP ***********************************************************************************************************************************************
+node1                      : ok=6    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
+node2                      : ok=6    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0   
+node3                      : ok=6    changed=0    unreachable=0    failed=1    skipped=0    rescued=0    ignored=0  
 ```

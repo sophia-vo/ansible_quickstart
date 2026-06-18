@@ -1,0 +1,9 @@
+expected_specs:
+  os_family: Debian
+  min_memory_mb: 128
+  required_user: ansible
+  required_packages:
+    - openssh-server
+    - sudo
+    - python3
+    - curl
