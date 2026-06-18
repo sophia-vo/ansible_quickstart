@@ -641,3 +641,163 @@ node1                      : ok=7    changed=0    unreachable=0    failed=0    s
 node2                      : ok=7    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
 node3                      : ok=7    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0  
 ```
+
+## Generate a Simple Report
+
+Create:
+```bash
+mkdir -p reports
+touch validation_report.yml
+```
+
+validation_report.yml:
+```yml
+- name: Generate server validation report
+  hosts: myhosts
+  gather_facts: true
+  become: true
+
+  vars_files:
+    - vars/server_specs.yml
+
+  tasks:
+    - name: Collect installed package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Check if required user exists
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ expected_specs.required_user }}"
+      register: user_check
+      failed_when: false
+
+    - name: Build list of missing packages
+      ansible.builtin.set_fact:
+        missing_packages: >-
+          {{
+            expected_specs.required_packages
+            | reject('in', ansible_facts.packages.keys())
+            | list
+          }}
+
+    - name: Build report row
+      ansible.builtin.set_fact:
+        report_row:
+          host: "{{ inventory_hostname }}"
+          os_family: "{{ ansible_os_family }}"
+          memory_mb: "{{ ansible_memtotal_mb }}"
+          user_exists: "{{ user_check.ansible_facts.getent_passwd is defined }}"
+          missing_packages: "{{ missing_packages }}"
+          compliant: >-
+            {{
+              ansible_os_family == expected_specs.os_family
+              and ansible_memtotal_mb >= expected_specs.min_memory_mb
+              and user_check.ansible_facts.getent_passwd is defined
+              and missing_packages | length == 0
+            }}
+
+    - name: Print report row
+      ansible.builtin.debug:
+        var: report_row
+
+    - name: Save host report locally
+      ansible.builtin.copy:
+        content: "{{ report_row | to_nice_json }}"
+        dest: "reports/{{ inventory_hostname }}_validation.json"
+      delegate_to: localhost
+      become: false
+```
+
+Run it: `ansible-playbook -i inventory.ini validation_report.yml`
+
+Expected output:
+```
+PLAY [Generate server validation report] *************************************************************************************************************
+
+TASK [Gathering Facts] *******************************************************************************************************************************
+ok: [node3]
+ok: [node1]
+ok: [node2]
+
+TASK [Collect installed package facts] ***************************************************************************************************************
+ok: [node2]
+ok: [node1]
+ok: [node3]
+
+TASK [Check if required user exists] *****************************************************************************************************************
+ok: [node1]
+ok: [node3]
+ok: [node2]
+
+TASK [Build list of missing packages] ****************************************************************************************************************
+ok: [node1]
+ok: [node2]
+ok: [node3]
+
+TASK [Build report row] ******************************************************************************************************************************
+ok: [node1]
+ok: [node2]
+ok: [node3]
+
+TASK [Print report row] ******************************************************************************************************************************
+ok: [node1] => {
+    "report_row": {
+        "compliant": true,
+        "host": "node1",
+        "memory_mb": 7836,
+        "missing_packages": [],
+        "os_family": "Debian",
+        "user_exists": true
+    }
+}
+ok: [node2] => {
+    "report_row": {
+        "compliant": true,
+        "host": "node2",
+        "memory_mb": 7836,
+        "missing_packages": [],
+        "os_family": "Debian",
+        "user_exists": true
+    }
+}
+ok: [node3] => {
+    "report_row": {
+        "compliant": true,
+        "host": "node3",
+        "memory_mb": 7836,
+        "missing_packages": [],
+        "os_family": "Debian",
+        "user_exists": true
+    }
+}
+
+TASK [Save host report locally] **********************************************************************************************************************
+changed: [node2 -> localhost]
+changed: [node3 -> localhost]
+changed: [node1 -> localhost]
+
+PLAY RECAP *******************************************************************************************************************************************
+node1                      : ok=7    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+node2                      : ok=7    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+node3                      : ok=7    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+```
+
+Check the reports:
+
+`ls reports`:
+```
+node1_validation.json   node2_validation.json   node3_validation.json
+```
+
+`cat reports/node1_validation.json`:
+```
+{
+    "compliant": true,
+    "host": "node1",
+    "memory_mb": 7836,
+    "missing_packages": [],
+    "os_family": "Debian",
+    "user_exists": true
+}%  
+```

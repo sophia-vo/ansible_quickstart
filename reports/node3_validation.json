@@ -1,0 +1,8 @@
+{
+    "compliant": true,
+    "host": "node3",
+    "memory_mb": 7836,
+    "missing_packages": [],
+    "os_family": "Debian",
+    "user_exists": true
+}
