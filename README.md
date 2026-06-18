@@ -1,6 +1,6 @@
 (Currently configured for a MacOS Linux system, will add Windows specific branch using Windows Subsystem for Linux (WSL) later.)
 
-Refer to [extremely_verbose_explanations.md](extremely_verbose_explanations.md) for in depth explanations of the code.
+Refer to [extremely_verbose_explanations.md](extremely_verbose_explanations.md) for in-depth explanations of the code. (The inital installation of ansible and docker setup will differ for windows since some linux commands differ, but once the inventory.ini is set up for your respective OS, the rest of the playbooks should run across any OS.)
 
 ## Install Ansible.
 
