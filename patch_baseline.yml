@@ -1,0 +1,27 @@
+---
+  - name: Patch servers in controlled batches
+    hosts: myhosts
+    become: true
+    gather_facts: true
+    serial: 1
+
+    tasks:
+      - name: Pre-check connectivity
+        ansible.builtin.ping:
+
+      - name: Update apt package cache
+        ansible.builtin.apt:
+          update_cache: true
+
+      - name: Apply available package updates
+        ansible.builtin.apt:
+          upgrade: dist
+
+      - name: Check whether reboot is required
+        ansible.builtin.stat:
+          path: /var/run/reboot-required
+        register: reboot_required
+
+      - name: Show reboot requirement
+        ansible.builtin.debug:
+          msg: "Reboot required: {{ reboot_required.stat.exists }}"

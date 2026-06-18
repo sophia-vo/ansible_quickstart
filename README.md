@@ -801,3 +801,482 @@ node1_validation.json   node2_validation.json   node3_validation.json
     "user_exists": true
 }%  
 ```
+
+## Patch in batches instead of all at once
+
+Create: `touch patch_baseline.yml`
+```yml
+- name: Patch servers in controlled batches
+  hosts: myhosts
+  become: true
+  gather_facts: true
+  serial: 1
+
+  tasks:
+    - name: Pre-check connectivity
+      ansible.builtin.ping:
+
+    - name: Update apt package cache
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Apply available package updates
+      ansible.builtin.apt:
+        upgrade: dist
+
+    - name: Check whether reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Show reboot requirement
+      ansible.builtin.debug:
+        msg: "Reboot required: {{ reboot_required.stat.exists }}"
+```
+
+Run dry-run first: `ansible-playbook -i inventory.ini patch_baseline.yml --check`
+
+```
+PLAY [Patch servers in controlled batches] ***********************************************************************************************************
+
+TASK [Gathering Facts] *******************************************************************************************************************************
+ok: [node1]
+
+TASK [Pre-check connectivity] ************************************************************************************************************************
+ok: [node1]
+
+TASK [Update apt package cache] **********************************************************************************************************************
+changed: [node1]
+
+TASK [Apply available package updates] ***************************************************************************************************************
+changed: [node1]
+
+TASK [Check whether reboot is required] **************************************************************************************************************
+ok: [node1]
+
+TASK [Show reboot requirement] ***********************************************************************************************************************
+ok: [node1] => {
+    "msg": "Reboot required: False"
+}
+
+PLAY [Patch servers in controlled batches] ***********************************************************************************************************
+
+TASK [Gathering Facts] *******************************************************************************************************************************
+ok: [node2]
+
+TASK [Pre-check connectivity] ************************************************************************************************************************
+ok: [node2]
+
+TASK [Update apt package cache] **********************************************************************************************************************
+changed: [node2]
+
+TASK [Apply available package updates] ***************************************************************************************************************
+changed: [node2]
+
+TASK [Check whether reboot is required] **************************************************************************************************************
+ok: [node2]
+
+TASK [Show reboot requirement] ***********************************************************************************************************************
+ok: [node2] => {
+    "msg": "Reboot required: False"
+}
+
+PLAY [Patch servers in controlled batches] ***********************************************************************************************************
+
+TASK [Gathering Facts] *******************************************************************************************************************************
+ok: [node3]
+
+TASK [Pre-check connectivity] ************************************************************************************************************************
+ok: [node3]
+
+TASK [Update apt package cache] **********************************************************************************************************************
+changed: [node3]
+
+TASK [Apply available package updates] ***************************************************************************************************************
+changed: [node3]
+
+TASK [Check whether reboot is required] **************************************************************************************************************
+ok: [node3]
+
+TASK [Show reboot requirement] ***********************************************************************************************************************
+ok: [node3] => {
+    "msg": "Reboot required: False"
+}
+
+PLAY RECAP *******************************************************************************************************************************************
+node1                      : ok=6    changed=2    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+node2                      : ok=6    changed=2    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+node3                      : ok=6    changed=2    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0  
+```
+
+Then run actual update: `ansible-playbook -i inventory.ini patch_baseline.yml`
+
+You can change 'serial: 1'. This tells Ansible to operate on one host at a time. The Ansible docs describe serial as the way to control how many servers are operated on at once. You can also use `serial: 2` or to start cautiously, then increase batch size:
+```yml
+serial:
+  - 1
+  - 3
+  - 5
+```
+
+## Add fail-early prechecks
+
+Every major automation should have a preflight play before it changes anything.
+
+Create: `touch preflight.yml`
+
+```yml
+- name: Preflight checks before maintenance
+  hosts: myhosts
+  gather_facts: true
+  become: true
+
+  vars:
+    min_memory_mb: 128
+    required_free_mb: 100
+
+  tasks:
+    - name: Check connectivity
+      ansible.builtin.ping:
+
+    - name: Check memory requirement
+      ansible.builtin.assert:
+        that:
+          - ansible_memtotal_mb >= min_memory_mb
+        fail_msg: "Not enough memory on {{ inventory_hostname }}. Found {{ ansible_memtotal_mb }} MB."
+        success_msg: "Memory check passed on {{ inventory_hostname }}."
+
+    - name: Check root filesystem free space in MB
+      ansible.builtin.command: df -Pm /
+      register: root_df
+      changed_when: false
+
+    - name: Extract available root filesystem space
+      ansible.builtin.set_fact:
+        root_available_mb: "{{ root_df.stdout_lines[1].split()[3] | int }}" # In actual SAP servers use ansible_mounts but since we are using Docker containers we use df -Pm /
+
+    - name: Check root filesystem free space requirement
+      ansible.builtin.assert:
+        that:
+          - root_available_mb | int >= required_free_mb
+        fail_msg: "Not enough free space on / for {{ inventory_hostname }}. Found {{ root_available_mb }} MB."
+        success_msg: "Disk space check passed on {{ inventory_hostname }}. Found {{ root_available_mb }} MB free."
+```
+
+Expected Output:
+```
+PLAY [Preflight checks before maintenance] ***********************************************************************************************************
+
+TASK [Gathering Facts] *******************************************************************************************************************************
+ok: [node1]
+ok: [node2]
+ok: [node3]
+
+TASK [Check connectivity] ****************************************************************************************************************************
+ok: [node1]
+ok: [node3]
+ok: [node2]
+
+TASK [Check memory requirement] **********************************************************************************************************************
+ok: [node1] => {
+    "changed": false,
+    "msg": "Memory check passed on node1."
+}
+ok: [node2] => {
+    "changed": false,
+    "msg": "Memory check passed on node2."
+}
+ok: [node3] => {
+    "changed": false,
+    "msg": "Memory check passed on node3."
+}
+
+TASK [Check root filesystem free space in MB] ********************************************************************************************************
+ok: [node1]
+ok: [node2]
+ok: [node3]
+
+TASK [Extract available root filesystem space] *******************************************************************************************************
+ok: [node1]
+ok: [node2]
+ok: [node3]
+
+TASK [Check root filesystem free space requirement] **************************************************************************************************
+ok: [node1] => {
+    "changed": false,
+    "msg": "Disk space check passed on node1. Found 976584 MB free."
+}
+ok: [node2] => {
+    "changed": false,
+    "msg": "Disk space check passed on node2. Found 976584 MB free."
+}
+ok: [node3] => {
+    "changed": false,
+    "msg": "Disk space check passed on node3. Found 976584 MB free."
+}
+
+PLAY RECAP *******************************************************************************************************************************************
+node1                      : ok=6    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+node2                      : ok=6    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+node3                      : ok=6    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+```
+
+## Learn block/rescue/always
+
+Ansible blocks let you group tasks and add rescue and always sections. Rescue tasks run after a failed task inside the block, similar to exception handling.
+
+Create: `touch safe_maintenance.yml`
+
+```yml
+---
+  - name: Safe maintenance structure
+    hosts: myhosts
+    become: true
+    gather_facts: true
+    serial: 1
+
+    tasks:
+      - name: Maintenance workflow with error handling
+        block:
+          - name: Pre-check server
+            ansible.builtin.ping:
+
+          - name: Simulate stopping application
+            ansible.builtin.debug:
+              msg: "Stopping application on {{ inventory_hostname }}"
+
+          - name: Simulate patching
+            ansible.builtin.debug:
+              msg: "Patching {{ inventory_hostname }}"
+
+          - name: Simulate starting application
+            ansible.builtin.debug:
+              msg: "Starting application on {{ inventory_hostname }}"
+
+          - name: Simulate health check
+            ansible.builtin.debug:
+              msg: "Health check passed on {{ inventory_hostname }}"
+
+        rescue:
+          - name: Report failure
+            ansible.builtin.debug:
+              msg: "Something failed on {{ inventory_hostname }}. Running recovery steps."
+
+          - name: Simulate rollback or restart
+            ansible.builtin.debug:
+              msg: "Attempting recovery on {{ inventory_hostname }}"
+
+        always:
+          - name: Always write final status
+            ansible.builtin.debug:
+              msg: "Maintenance attempt finished for {{ inventory_hostname }}"
+```
+
+Run: `ansible-playbook -i inventory.ini safe_maintenance.yml'
+
+Expected output:
+```
+PLAY [Safe maintenance structure] ********************************************************************************************************************
+
+TASK [Gathering Facts] *******************************************************************************************************************************
+ok: [node1]
+
+TASK [Pre-check server] ******************************************************************************************************************************
+ok: [node1]
+
+TASK [Simulate stopping application] *****************************************************************************************************************
+ok: [node1] => {
+    "msg": "Stopping application on node1"
+}
+
+TASK [Simulate patching] *****************************************************************************************************************************
+ok: [node1] => {
+    "msg": "Patching node1"
+}
+
+TASK [Simulate starting application] *****************************************************************************************************************
+ok: [node1] => {
+    "msg": "Starting application on node1"
+}
+
+TASK [Simulate health check] *************************************************************************************************************************
+ok: [node1] => {
+    "msg": "Health check passed on node1"
+}
+
+TASK [Always write final status] *********************************************************************************************************************
+ok: [node1] => {
+    "msg": "Maintenance attempt finished for node1"
+}
+
+PLAY [Safe maintenance structure] ********************************************************************************************************************
+
+TASK [Gathering Facts] *******************************************************************************************************************************
+ok: [node2]
+
+TASK [Pre-check server] ******************************************************************************************************************************
+ok: [node2]
+
+TASK [Simulate stopping application] *****************************************************************************************************************
+ok: [node2] => {
+    "msg": "Stopping application on node2"
+}
+
+TASK [Simulate patching] *****************************************************************************************************************************
+ok: [node2] => {
+    "msg": "Patching node2"
+}
+
+TASK [Simulate starting application] *****************************************************************************************************************
+ok: [node2] => {
+    "msg": "Starting application on node2"
+}
+
+TASK [Simulate health check] *************************************************************************************************************************
+ok: [node2] => {
+    "msg": "Health check passed on node2"
+}
+
+TASK [Always write final status] *********************************************************************************************************************
+ok: [node2] => {
+    "msg": "Maintenance attempt finished for node2"
+}
+
+PLAY [Safe maintenance structure] ********************************************************************************************************************
+
+TASK [Gathering Facts] *******************************************************************************************************************************
+ok: [node3]
+
+TASK [Pre-check server] ******************************************************************************************************************************
+ok: [node3]
+
+TASK [Simulate stopping application] *****************************************************************************************************************
+ok: [node3] => {
+    "msg": "Stopping application on node3"
+}
+
+TASK [Simulate patching] *****************************************************************************************************************************
+ok: [node3] => {
+    "msg": "Patching node3"
+}
+
+TASK [Simulate starting application] *****************************************************************************************************************
+ok: [node3] => {
+    "msg": "Starting application on node3"
+}
+
+TASK [Simulate health check] *************************************************************************************************************************
+ok: [node3] => {
+    "msg": "Health check passed on node3"
+}
+
+TASK [Always write final status] *********************************************************************************************************************
+ok: [node3] => {
+    "msg": "Maintenance attempt finished for node3"
+}
+
+PLAY RECAP *******************************************************************************************************************************************
+node1                      : ok=7    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+node2                      : ok=7    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+node3                      : ok=7    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+```
+
+Eventually the directory will look something like this:
+```
+sap-automation/
+  inventories/
+    dev.ini
+    qa.ini
+    prod.ini
+
+  group_vars/
+    sap_app_servers.yml
+    hana_servers.yml
+    all.yml
+
+  vars/
+    sap_build_specs.yml
+    patch_window.yml
+
+  playbooks/
+    01_preflight.yml
+    02_validate_build.yml
+    03_pre_patch_report.yml
+    04_stop_sap.yml
+    05_patch_os.yml
+    06_reboot.yml
+    07_start_sap.yml
+    08_health_check.yml
+    09_post_patch_report.yml
+
+  roles/
+    validation/
+    reporting/
+    patching/
+    sap_control/
+    health_check/
+
+  reports/
+    pre/
+    post/
+```
+
+In this local lab we are checking:
+```
+packages
+users
+memory
+disk
+OS
+connectivity
+```
+but in real SAP automation it would be things like:
+```
+SAP application server:
+  - sidadm user exists
+  - /usr/sap exists
+  - /sapmnt exists
+  - SAP instance profile exists
+  - sapstartsrv is reachable
+  - required ports are open
+  - work processes are healthy
+  - filesystem has enough free space
+  - kernel version is approved
+
+SAP HANA server:
+  - hdbadm user exists
+  - HANA services are running
+  - HANA version/revision matches standard
+  - backup status is recent
+  - data/log/shared filesystems are mounted
+  - memory allocation is correct
+  - replication status is healthy
+
+Patching:
+  - pre-check all nodes
+  - generate pre-patch report
+  - stop SAP cleanly
+  - patch OS
+  - reboot if needed
+  - start SAP
+  - validate health
+  - generate post-patch report
+```
+
+In order the entire playthrough is:
+```
+ansible-playbook -i inventory.ini gather_facts.yaml
+ansible-playbook -i inventory.ini validate_build.yaml
+ansible-playbook -i inventory.ini remediate_packages.yaml --check
+ansible-playbook -i inventory.ini remediate_packages.yaml
+ansible-playbook -i inventory.ini validation_report.yaml
+ansible-playbook -i inventory.ini preflight.yaml
+ansible-playbook -i inventory.ini safe_maintenance.yaml
+```
+
+With the focus being to build one master playbook that runs:
+  1. preflight
+  2. validation
+  3. report
+  4. remediation
+  5. validation again

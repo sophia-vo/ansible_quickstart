@@ -1,0 +1,36 @@
+---
+  - name: Preflight checks before maintenance
+    hosts: myhosts
+    gather_facts: true
+    become: true
+
+    vars:
+      min_memory_mb: 128
+      required_free_mb: 100
+
+    tasks:
+      - name: Check connectivity
+        ansible.builtin.ping:
+
+      - name: Check memory requirement
+        ansible.builtin.assert:
+          that:
+            - ansible_memtotal_mb >= min_memory_mb
+          fail_msg: "Not enough memory on {{ inventory_hostname }}. Found {{ ansible_memtotal_mb }} MB."
+          success_msg: "Memory check passed on {{ inventory_hostname }}."
+
+      - name: Check root filesystem free space in MB
+        ansible.builtin.command: df -Pm /
+        register: root_df
+        changed_when: false
+
+      - name: Extract available root filesystem space
+        ansible.builtin.set_fact:
+          root_available_mb: "{{ root_df.stdout_lines[1].split()[3] | int }}"
+
+      - name: Check root filesystem free space requirement
+        ansible.builtin.assert:
+          that:
+            - root_available_mb | int >= required_free_mb
+          fail_msg: "Not enough free space on / for {{ inventory_hostname }}. Found {{ root_available_mb }} MB."
+          success_msg: "Disk space check passed on {{ inventory_hostname }}. Found {{ root_available_mb }} MB free."

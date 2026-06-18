@@ -1,0 +1,42 @@
+---
+  - name: Safe maintenance structure
+    hosts: myhosts
+    become: true
+    gather_facts: true
+    serial: 1
+
+    tasks:
+      - name: Maintenance workflow with error handling
+        block:
+          - name: Pre-check server
+            ansible.builtin.ping:
+
+          - name: Simulate stopping application
+            ansible.builtin.debug:
+              msg: "Stopping application on {{ inventory_hostname }}"
+
+          - name: Simulate patching
+            ansible.builtin.debug:
+              msg: "Patching {{ inventory_hostname }}"
+
+          - name: Simulate starting application
+            ansible.builtin.debug:
+              msg: "Starting application on {{ inventory_hostname }}"
+
+          - name: Simulate health check
+            ansible.builtin.debug:
+              msg: "Health check passed on {{ inventory_hostname }}"
+
+        rescue:
+          - name: Report failure
+            ansible.builtin.debug:
+              msg: "Something failed on {{ inventory_hostname }}. Running recovery steps."
+
+          - name: Simulate rollback or restart
+            ansible.builtin.debug:
+              msg: "Attempting recovery on {{ inventory_hostname }}"
+
+        always:
+          - name: Always write final status
+            ansible.builtin.debug:
+              msg: "Maintenance attempt finished for {{ inventory_hostname }}"
