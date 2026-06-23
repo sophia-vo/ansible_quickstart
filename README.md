@@ -35,6 +35,8 @@ ansible-playbook -i inventory.ini safe_maintenance.yml             // Not useful
 
 ---
 
+# Installation and Setup Guide
+
 ### Install WSL Ubuntu
 
 Open PowerShell as Administrator:
