@@ -5,16 +5,16 @@
 Open PowerShell as Administrator:
 
 ```powershell
-wsl --install -d Ubuntu
+wsl --install
 ```
 
-Restart your computer if prompted.
+This downloads the latest Linux kernel. It sets WSL 2 as your default version. It downloads and installs the default Ubuntu distribution.
 
-Open the **Ubuntu** application from the Start Menu and complete the initial Linux user setup.
+Within this download it will prompt you to create a linux user and password. The password will be directly relevant in the next few steps, so remember it.
 
 ## Install Docker Desktop
 
-Download and install Docker Desktop.
+Download and install Docker Desktop. The easiest way to do this is through the Windows Store. (While you are here, download VS Code as well and Git).
 
 During installation:
 
@@ -30,9 +30,9 @@ After Docker Desktop starts:
 Settings → Resources → WSL Integration
 ```
 
-3. Enable integration for your Ubuntu distribution.
+3. Enable integration for your Ubuntu distribution. (So check both the checkbox and Ubuntu selection).
 
-Verify Docker is available inside WSL:
+Verify Docker is available inside WSL (You can also run this in normal powershell in a new terminal window):
 
 ```bash
 docker info
@@ -41,19 +41,36 @@ docker compose version
 
 ## Install Ansible
 
-Open the Ubuntu terminal and run:
+Open the Ubuntu terminal (Open powershell/notadministrator, then at top hit the down arrow and select Ubuntu. This will open WSL/Ubuntu):
+
+We are downloading git and checking the version so we can simply clone the repo.
 
 ```bash
 sudo apt update
-sudo apt install -y python3 python3-pip openssh-client
-python3 -m pip install --user ansible
+sudo apt install git -y
+git --version
 ```
 
-Add Ansible to your PATH:
+`sudo apt update` will require your linux password you set up earlier.
 
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
+`cd` to your home directory and check your path (just in case).
+
+```
+cd ~
+pwd
+```
+This should say /home/name.
+
+Now `git clone repo-link` and `cd ansible_quickstart`.
+
+```
+sudo apt install python3-venv python3-pip -y
+```
+
+```
+python3 -m venv venv
+source venv/bin/activate
+pip install ansible
 ```
 
 Verify installation:
@@ -68,13 +85,11 @@ At this point, all remaining playbooks in this guide should work the same way on
 
 Refer to [extremely_verbose_explanations.md](extremely_verbose_explanations.md) for in-depth explanations of the code. (The inital installation of ansible and docker setup will differ for windows since some linux commands differ, but once the inventory.ini is set up for your respective OS, the rest of the playbooks should run across any OS.)
 
-## Install Ansible (MacOS)
+We've already cloned the repo, so any creating directory commands can be skipped unless specified.
 
-```bash
-pip install ansible
-```
+## Create a project folder on your filesystem. 
 
-## Create a project folder on your filesystem.
+We are already inside ansible_quickstart so this step will be skipped unless you did not clone the repo.
 
 ```bash
 mkdir ansible_quickstart && cd ansible_quickstart
@@ -96,6 +111,7 @@ From your ansible_quickstart directory:
 mkdir -p lab/ssh
 cd lab
 ```
+You will need to run the make directory command since this file is part of the .gitignore.
 
 ## Create or copy your SSH public key:
 
@@ -103,8 +119,11 @@ cd lab
 test -f ~/.ssh/id_ed25519.pub || ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -C ansible-lab
 cp ~/.ssh/id_ed25519.pub ssh/authorized_keys
 ```
+Run this command. If you are rerunning, accept any new changes to make a new ssh key pair.
 
 ## Create Dockerfile (in lab):
+
+This file is already a part of the repo so if you cloned the repo, do not create this.
 
 ```Dockerfile
 FROM ubuntu:24.04
@@ -132,6 +151,8 @@ CMD ["/usr/sbin/sshd", "-D", "-e"]
 
 ## Create docker-compose.yml (in lab):
 
+Same with this file, clone -> don't make.
+
 ```yml
 services:
   node1:
@@ -155,17 +176,13 @@ services:
 
 ## In separate terminal: (make sure Docker Desktop is installed)
 
-```bash
-open -a Docker
-```
-
-## Check it with:
+## Check it with (not needed since we've checked earlier):
 
 ```bash
 docker info
 ```
 
-## Back in intial terminal in lab:
+## Back in initial terminal in lab (Back in ubuntu terminal where we have cd into lab):
 
 Start the containers:
 
@@ -179,7 +196,7 @@ docker compose up -d --build
 cd ..
 ```
 
-## Create inventory.ini:
+## Create inventory.ini (cloned repo -> don't create):
 
 ```ini
 [myhosts]
@@ -196,11 +213,13 @@ ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'
 
 ## Test SSH manually:
 
+This is testing the ssh connection with one of the containers/ports. If this doesn't work check your key pairs.
+
 ```bash
 ssh -p 2221 ansible@127.0.0.1
 ```
 
-Then `exit` back to ansible_quickstart.
+Then `exit` back to ansible_quickstart. (Type `exit` to disconnect from ssh server).
 
 ## Then test Ansible:
 
@@ -222,6 +241,10 @@ node3 | SUCCESS => {
     "ping": "pong"
 }
 ```
+
+Once this has successfully run, you can now follow along with the rest of the playbooks. Refer to extremely_verbose_explanations for line by line explanations of the playbook yaml code. Skip past the docker setup since that isn't directly relevant.
+
+If you want to make changes to the playbook code or create new playbooks, since we have cloned the repo in our WSL filesystem and not Windows directly, our project in WSL is located at `/home/<your-username>/ansible-quickstart`. After installing VS Code, install the extension 'WSL'. When you are in your Ubuntu terminal and have cd into the ansible folder, use `code .` to open up the folder in VS Code and make edits there. You can also use basic terminal commands like `nano` or `vim`, but this is not recommended. In Windows File Explorer, the files are stored at `\\wsl$\Ubuntu\home\<your-username>\ansible_quickstart`.
 
 ## Creating a playbook:
 
