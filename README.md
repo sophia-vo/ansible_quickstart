@@ -1,8 +1,74 @@
-(Currently configured for a MacOS Linux system, will add Windows specific branch using Windows Subsystem for Linux (WSL) later.)
+## Windows Setup (WSL + Docker Desktop)
+
+### Install WSL Ubuntu
+
+Open PowerShell as Administrator:
+
+```powershell
+wsl --install -d Ubuntu
+```
+
+Restart your computer if prompted.
+
+Open the **Ubuntu** application from the Start Menu and complete the initial Linux user setup.
+
+## Install Docker Desktop
+
+Download and install Docker Desktop.
+
+During installation:
+
+* Enable WSL 2 integration.
+* Ensure Docker Desktop is configured to use the WSL 2 backend.
+
+After Docker Desktop starts:
+
+1. Open Docker Desktop.
+2. Navigate to:
+
+```text
+Settings → Resources → WSL Integration
+```
+
+3. Enable integration for your Ubuntu distribution.
+
+Verify Docker is available inside WSL:
+
+```bash
+docker info
+docker compose version
+```
+
+## Install Ansible
+
+Open the Ubuntu terminal and run:
+
+```bash
+sudo apt update
+sudo apt install -y python3 python3-pip openssh-client
+python3 -m pip install --user ansible
+```
+
+Add Ansible to your PATH:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+Verify installation:
+
+```bash
+ansible --version
+```
+
+At this point, all remaining playbooks in this guide should work the same way on Windows, macOS, and Linux because Ansible is communicating with Linux Docker containers through SSH.
+
+---
 
 Refer to [extremely_verbose_explanations.md](extremely_verbose_explanations.md) for in-depth explanations of the code. (The inital installation of ansible and docker setup will differ for windows since some linux commands differ, but once the inventory.ini is set up for your respective OS, the rest of the playbooks should run across any OS.)
 
-## Install Ansible.
+## Install Ansible (MacOS)
 
 ```bash
 pip install ansible
