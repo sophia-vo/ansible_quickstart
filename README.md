@@ -1,5 +1,40 @@
 ## Windows Setup (WSL + Docker Desktop)
 
+If you have successfully set up Ansible once, refer to these steps here for a demo run through.
+
+---
+
+# Demo Run Through
+
+1. Open up Docker Desktop (run in powershell, not ubuntu)
+```
+docker desktop start
+```
+2. Open up Ubuntu terminal in Powershell.
+3. `cd ansible-quickstart` - Quick tip is type `cd ans` then press tab to auto-complete.
+4. `cd lab`
+5. Optional: You can regenerate your SSH Keys within lab folder (not needed since we've already made and copied them)
+```
+test -f ~/.ssh/id_ed25519.pub || ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -C ansible-lab
+cp ~/.ssh/id_ed25519.pub ssh/authorized_keys
+```
+7. `docker compose up -d --build` - Start up containers (feel free to change configuration and inventory layout).
+8. `cd ..` - You should be in ansible-quickstart now. pwd to check.
+9. All the playbooks can be ran in order now:
+```
+ansible-playbook -i inventory.ini gather_facts.yml                 // Should be all Green
+ansible-playbook -i inventory.ini validate_build.yml               // Should be Green and Red.
+ansible-playbook -i inventory.ini remediate_packages.yml --check   // Should be Green and Red.
+ansible-playbook -i inventory.ini remediate_packages.yml           // Should be Green and Yellow.
+ansible-playbook -i inventory.ini validation_report.yml            // Should be Green and Yellow.
+ansible-playbook -i inventory.ini preflight.yml                    // Should be Green (Ideally).
+ansible-playbook -i inventory.ini safe_maintenance.yml             // Not useful for our case, should be Green.
+```
+
+**END OF DEMO**
+
+---
+
 ### Install WSL Ubuntu
 
 Open PowerShell as Administrator:
